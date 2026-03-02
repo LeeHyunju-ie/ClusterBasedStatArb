@@ -11,4 +11,17 @@ Key features:
 - Market-neutral portfolio optimization
 - Walk-forward cross-validation framework
 
-The codebase enables full reproduction of the experimental results reported in the paper.
+---
+
+Scripts:
+ - modules.py: scripts for data preprocessing, model, and performance measurements
+ - main.py: scripts for training and testing
+
+---
+
+Framework:
+<p align="center">
+  <img src="images/framework.png" alt="Centered image">
+</p>
+
+
