@@ -15,11 +15,14 @@ if __name__ == "__main__":
     ws = 14*6
     dropout = 0.3
 
-    data = pd.read_csv('data.csv') # load data
+    data = pd.read_csv('data.csv', index_col=0) # load data
     N = data.shape[1]
-    timepoints = ['202'] # timepoint for data split
+    timepoints = ['2021-01-01', '2023-01-01', '2023-07-01', '2023-10-01'] # timepoint for data split
     
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
+    print(f'Data Loaded: {data.shape}-shaped')
+
 
     ### Train
     # 1. Set Hyperparameters
@@ -46,6 +49,7 @@ if __name__ == "__main__":
     # 3. Initialize model
     model = pt_model(_params, N, ws, k_clust, device).to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+    print('Model Initialized')
 
 
     # 4. Start learning
@@ -53,6 +57,7 @@ if __name__ == "__main__":
     loss_min = 1e+32
     temp = 0.1
         
+    print('Train Model')
     for epoch in range(n_epoch) :
 
         model.train()            
@@ -78,14 +83,14 @@ if __name__ == "__main__":
             break
 
 
-
+    print(f'Training Done: early stopping at {es_last}')
+    
     ### Test Results
     model.load_state_dict(torch.load(fname_pt))
     model.eval()
 
     _, (sr_test_0, cumrtn_test_0) = get_measures(model, test_loader, fee=0, opt_return_all=False)
-
     _, (sr_test, cumrtn_test) = get_measures(model, test_loader, fee=fee, opt_return_all=False)
     
-    print(f'Result(Without fees): cum. returns of {round(cumrtn_test_0, 3)} and sharpe ratio of {round(sr_test_0, 3)}')
-    print(f'Result(With fees): cum. returns of {round(cumrtn_test, 3)} and sharpe ratio of {round(sr_test, 3)}')
+    print(f'Result on the Test Period (Without fees): cum. returns of {round(cumrtn_test_0, 3)} and annual. sharpe ratio of {round(sr_test_0*((6*365)**0.5), 3)}')
+    print(f'Result on the Test Period (With fees): cum. returns of {round(cumrtn_test, 3)} and annual. sharpe ratio of {round(sr_test*((6*365)**0.5), 3)}')

@@ -6,7 +6,6 @@ import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
 
 import math
-import gc
 
 
 
@@ -155,7 +154,7 @@ class pt_model(nn.Module):
 
         self.gamma = torch.nn.parameter.Parameter(torch.ones(self.N, self.K), requires_grad=True)
 
-    def forward(self, r, z=None, c=None, temp=1, opt_z=False):
+    def forward(self, r, z=None, c=None, temp=1):
         batch_size = r.shape[0]
         ws = r.shape[1]
 
@@ -164,7 +163,7 @@ class pt_model(nn.Module):
 
             c = self.clusterBlocks(r)      
             c = self.fc_cluster(c)  
-            # c = c - c.mean(axis=(1,), keepdim=True)
+            c = c - c.mean(axis=(1,), keepdim=True)
              
             gamma  = self.gamma[None, :, :] 
             r_hat = c[:, :, None, :] * gamma[:, None, :, :] # bs, ws, n, k
@@ -179,11 +178,7 @@ class pt_model(nn.Module):
         s = s.permute(0, 3, 1, 2).contiguous() # bs, k, ws, n
         s = s.view(-1, self.ws, self.N) # -1, 1, ws 
 
-        if self.params['opt_cumsum']:
-            h = self.arbitrageBlocks(s.cumsum(1)) # -1, hidden, ws / -1, ws, hidden
-        else:
-            h = self.arbitrageBlocks(s) # -1, hidden, ws / -1, ws, hidden
-
+        h = self.arbitrageBlocks(s.cumsum(1)) # -1, hidden, ws / -1, ws, hidden
         
         w = self.linear_w(h[:,-1,:]).squeeze()
         w = self.dropout_w(w)
@@ -263,12 +258,8 @@ def get_measures(model, dataloader, fee=0, eps=1e-32, opt_return_all=False):
         c_all = np.concatenate(c_all)
         s_all = np.concatenate(s_all)
         zprob_all = np.concatenate(zprob_all)
-
-
-    sr_cluster = -custom_loss(torch.Tensor(weights), torch.Tensor(r),
-                              torch.Tensor(z_all), torch.Tensor(gamma_all),
-                              fee=fee).item()
     
+
     zgamma = z_all * gamma_all
     weights_beta = zgamma * np.sum(weights * zgamma, axis=1, keepdims=True) / np.sum(zgamma * zgamma, axis=1, keepdims=True)
     weights_beta[np.isnan(weights_beta)] = 0
@@ -282,34 +273,17 @@ def get_measures(model, dataloader, fee=0, eps=1e-32, opt_return_all=False):
     weights[np.isnan(weights)] = 0
 
 
-    if isinstance(fee, list):
-        sr = []
-        cumrtn = []
-        r_pf = []
-        for s in fee :
-            _r_pf = (weights * r).sum(axis=1)
-            weights_pre = weights[:-1] * (r+1)[:-1]
-            weights_pre = weights_pre/abs(weights_pre).sum(axis=1, keepdims=True)
-            weights_pre[np.isnan(weights_pre)] = 0
-            _r_pf[0] -= np.sum(abs(weights[0])) * s
-            _r_pf[1:] -= np.sum(abs(weights[1:] - weights_pre), axis=1) * s
-            
-            r_pf.append(_r_pf)
-            cumrtn.append((_r_pf + 1).cumprod()[-1])
-            sr.append(_r_pf.mean()/(_r_pf.std()+eps))
+    r_pf = (weights * r).sum(axis=1)
+    weights_pre = weights[:-1] * (r+1)[:-1]
+    weights_pre = weights_pre/abs(weights_pre).sum(axis=1, keepdims=True)
+    weights_pre[np.isnan(weights_pre)] = 0
+    r_pf[0] -= np.sum(abs(weights[0])) * fee
+    r_pf[1:] -= np.sum(abs(weights[1:] - weights_pre), axis=1) * fee
+    
+    cumrtn = (r_pf + 1).cumprod()[-1]
+    sr = r_pf.mean()/(r_pf.std()+eps)
 
-    else:
-        r_pf = (weights * r).sum(axis=1)
-        weights_pre = weights[:-1] * (r+1)[:-1]
-        weights_pre = weights_pre/abs(weights_pre).sum(axis=1, keepdims=True)
-        weights_pre[np.isnan(weights_pre)s] = 0
-        r_pf[0] -= np.sum(abs(weights[0])) * fee
-        r_pf[1:] -= np.sum(abs(weights[1:] - weights_pre), axis=1) * fee
-
-        cumrtn = (r_pf + 1).cumprod()[-1]
-        sr = r_pf.mean()/(r_pf.std()+eps)
-
-    return (weights, r, rws_all, r_pf, z_all, zprob_all, c_all, s_all, rhat_all, gamma_all), (sr, cumrtn, sr_cluster)
+    return (weights, r, rws_all, r_pf, z_all, zprob_all, c_all, s_all, rhat_all, gamma_all), (sr, cumrtn)
 
 
 def measure_performance(pf):

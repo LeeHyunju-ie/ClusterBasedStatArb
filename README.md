@@ -24,4 +24,6 @@ Framework:
   <img src="images/framework.png" alt="Centered image">
 </p>
 
+---
 
+The 4-hour interval Binance Futures cryptocurrency data used in the paper’s experiments can be found at: https://dx.doi.org/10.21227/bt01-qf94
